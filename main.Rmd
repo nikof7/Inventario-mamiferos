@@ -1,0 +1,83 @@
+---
+title: "Analizando datos"
+output: html_document
+date: "2023-02-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(kableExtra)
+```
+
+Esto es una prueba con los datos que estan en el drive, carpeta "Planillas Excel", utilicé "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
+
+De cada tabla me quede con el Punto, Fecha, Hora, Especie, Cantidad de individuos y Observaciones, no elimine ninguna fila. Luego unifiqué las tres en un mismo archivo csv.
+
+# Importando tabla
+
+```{r message=FALSE, warning=FALSE}
+data1 <- read_csv2("./datos/datos.csv", col_types = cols(
+  Punto = col_character(),
+  Fecha = col_date(),
+  Hora = col_time(),
+  Especie = col_character(),
+  N = col_integer(),
+  Observaciones = col_character()
+))
+```
+
+```{r}
+tail(unique(data1$Especie))
+```
+
+Se observa que hay especies repetidas, algunas se les agrega ? o simplemente estan mal escritas. Ej. L. gymnocerus, L. gymnocercus, L. gymnocercus?. En total hay 969 registros.
+
+# Limpiando datos
+Limpie los datos de "Especie" usando open refine. Deje solo los registros de mamiferos silvestres que lleguen hasta especie.
+
+```{r}
+data <- read_csv("./datos/datos-corredigos-silvestres.csv", col_types = cols( 
+  Punto = col_character(),
+  Fecha = col_date(),
+  Hora = col_time(),
+  Especie = col_character(),
+  N = col_integer(),
+  Observaciones = col_character()
+))
+```
+
+
+```{r echo=FALSE}
+head(data) %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F)
+```
+
+# Cantidad de registros por especie
+Construyo una tabla con la cantidad de registros por especie y calculo el porcentaje de cada una.
+```{r}
+records_per_species <- data %>%
+  group_by(Especie) %>% 
+  summarize(Total = sum(N)) %>%
+  arrange(Total) %>% 
+  mutate(perc = round(Total / sum(Total), 3)*100)
+```
+
+```{r echo=FALSE}
+records_per_species %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Grafico:
+```{r}
+ggplot(data=records_per_species, aes(x=reorder(Especie, perc), y=perc)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  xlab("") +
+  ylab("Porcentaje de registros") +
+  theme(axis.text.y=element_text(face="italic"))
+```
+
