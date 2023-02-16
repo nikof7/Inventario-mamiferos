@@ -81,3 +81,63 @@ ggplot(data=records_per_species, aes(x=reorder(Especie, perc), y=perc)) +
   theme(axis.text.y=element_text(face="italic"))
 ```
 
+# Probando el paquete "vegan".
+
+```{r echo=FALSE, message=FALSE}
+library(vegan)
+```
+
+Para utilizar este paquete necesitamos que la información esté organizada de esta forma:
+
+| **Site** | **Sp1** | **Sp2** | **Sp3** | **SpN** |
+|:--------:|:-------:|:-------:|:-------:|:-------:|
+|   **1**  |    4    |    2    |    0    |    0    |
+|   **2**  |    0    |    0    |    2    |    5    |
+|   **N**  |    0    |    0    |    0    |    10   |
+
+## Armado de la tabla
+
+Elimino la fecha, hora y observaciones porque no tienen sentido para este análisis.
+
+```{r}
+data_vegan_long <- data %>% 
+  select(Punto, Especie, N) %>% 
+  group_by(Punto, Especie) %>% 
+  summarize(Total = sum(N), .groups = 'drop')
+```
+
+La tabla ahora luce así:
+
+```{r echo=FALSE}
+head(data_vegan_long) %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Para cada punto hay un n de las especies.
+
+El paquete vegan necesita que las filas sean los sitios, las columnas el recuento por especie y los sitios tienen que ser numericos.
+```{r}
+data_vegan_wide <- data_vegan_long %>% 
+  spread(Especie, Total) %>% 
+  mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%  #rellena con ceros los NA's
+  mutate(Punto, Punto = row_number())
+```
+
+```{r echo=FALSE}
+head(data_vegan_wide) %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>% 
+  scroll_box(width = "100%")
+```
+
+## Calculando estadísticos
+
+Explorando; curva de acumulación
+```{r}
+datos <- data_vegan_wide
+sp1 <- specaccum(datos)
+plot(sp1)
+```
+
+
