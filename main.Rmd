@@ -17,7 +17,10 @@ library(ggdendro)
 library(plotly)
 ```
 
-Estuve practicando con algunos estadísticos y gráficos. Usé la carpeta datos que estan en drive; carpeta "Planillas Excel", y cargué los archivos "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
+Estuve practicando con algunos estadísticos y gráficos. Usé la carpeta datos que estan en drive; carpeta "Planillas Excel", y cargué los archivos 
+- "2020_L Garzón.xlsx"
+- "2020_LRocha_1ercampaña_1-5
+- 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
 
 De cada tabla me quedé con el Punto, Fecha, Hora, Especie, Cantidad de individuos y Observaciones, no elimine ninguna fila. Luego unifiqué las tres en un mismo archivo csv.
 
