@@ -17,7 +17,8 @@ library(ggdendro)
 library(plotly)
 ```
 
-Estuve practicando con algunos estadísticos y gráficos. Usé la carpeta datos que estan en drive; carpeta "Planillas Excel", y cargué los archivos 
+Estuve practicando con algunos estadísticos y gráficos. Usé la carpeta datos que estan en drive; carpeta "Planillas Excel", y cargué los archivos
+
 - "2020_L Garzón.xlsx"
 - "2020_LRocha_1ercampaña_1-5
 - 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
