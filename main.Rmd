@@ -12,9 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(kableExtra)
+library(vegan)
+library(ggdendro)
+library(plotly)
 ```
 
-Esto es una prueba con los datos que están en el drive, carpeta "Planillas Excel", utilicé "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
+Estuve practicando con algunos estadísticos y gráficos. Usé la carpeta datos que estan en drive; carpeta "Planillas Excel", y cargué los archivos "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
 
 De cada tabla me quedé con el Punto, Fecha, Hora, Especie, Cantidad de individuos y Observaciones, no elimine ninguna fila. Luego unifiqué las tres en un mismo archivo csv.
 
@@ -35,7 +38,7 @@ data1 <- read_csv2("./datos/datos.csv", col_types = cols(
 tail(unique(data1$Especie))
 ```
 
-Se observa que hay especies repetidas, algunas se les agrega ? o simplemente estan mal escritas. Ej. L. gymnocerus, L. gymnocercus, L. gymnocercus?. En total hay 969 registros.
+Se observa que hay especies repetidas, algunas se les agrega "?" o simplemente estan mal escritas. Ej. L. gymnocerus, L. gymnocercus, L. gymnocercus?. En total hay 969 registros.
 
 # Limpiando datos
 Limpie los datos de "Especie" usando open refine. Deje solo los registros de mamiferos silvestres que lleguen hasta especie.
@@ -76,7 +79,7 @@ records_per_species %>%
 
 Gráfico:
 ```{r}
-records_per_species %>% 
+r <- records_per_species %>% 
   ggplot(aes(y=reorder(Especie, perc), x=perc)) +
   geom_col(fill = "gray70") +
   geom_text(aes(label = paste(perc*100, "%", sep ="")), nudge_x = 0.015, size=3.2) +
@@ -92,13 +95,12 @@ records_per_species %>%
         panel.grid.major = element_line(size = 0.1, linetype = 'solid', colour = "#f2f2f2"),
         panel.grid.minor = element_line(size = 0.1, linetype = 'solid', colour = "#f2f2f2")
   )
+
+ggplotly(r)
+
 ```
 
 # Probando el paquete "vegan".
-
-```{r echo=FALSE, message=FALSE}
-library(vegan)
-```
 
 Para utilizar este paquete necesitamos que la información esté organizada de esta forma:
 
@@ -130,17 +132,17 @@ head(data_vegan_long) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-Para cada punto hay un n de las especies. Con esto, ahora puedo transformar esta tabla larga (long) a una ancha.
+Para cada punto hay un n de las especies. Con esto, ahora puedo transformar esta tabla larga (long) a una ancha (wide) que el paquete vegan utiliza.
 ```{r}
 data_vegan_wide <- data_vegan_long %>% 
   spread(Especie, Total) %>% 
-  mutate_if(is.numeric, ~replace(., is.na(.), 0))  # rellena con ceros los NA's
+  mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%   # rellena con ceros los NA's
+  column_to_rownames("Punto")
 
 ### Guardo qué número es cada punto
-puntos <- data_vegan_wide$Punto 
+puntos <- row.names(data_vegan_wide)
 
-#### Paso de indigo LG, LR, SG a número 1, 2 y 3
-data_vegan_wide <- mutate(data_vegan_wide, Punto, Punto = row_number())
+#data_vegan_wide <- select(data_vegan_wide, -Punto)
 ```
 
 ```{r echo=FALSE}
@@ -156,13 +158,15 @@ Riqueza, diversidad, índice de dominancia, etc. Elimino los SD porque dan todos
 ```{r}
 datos <- data_vegan_wide
 
-outcome <- tibble(id = data_vegan_wide$Punto, puntos = puntos) %>% 
-  mutate(richness_ = specnumber(datos),
-         shannon_ = diversity(datos, index = "shannon"),
-         simpson_ = diversity(datos, index = "simpson"),
-         invsimpson_ = diversity(datos, index = "invsimpson"),
-         specpool(datos, pool = puntos)) %>% 
-  select(-Species, -ends_with(".se"))
+outcome <- tibble(
+    richness_ = specnumber(datos),
+    shannon_ = diversity(datos, index = "shannon"),
+    simpson_ = diversity(datos, index = "simpson"),
+    invsimpson_ = diversity(datos, index = "invsimpson"),
+    specpool(datos, pool = puntos)
+  ) %>% 
+  select(-Species, -ends_with(".se")) %>%
+  mutate(Punto = puntos, .before=1)
 ```
 
 ```{r echo=FALSE}
@@ -172,14 +176,52 @@ outcome %>%
   scroll_box(width = "100%")
 ```
 
-```{r}
-
-```
-
 Esto es lo que decía antes sobre los números con coma:
 
 
 ```{r}
 specpool(datos)
 ```
+Abundancia de las especies en los diferentes sitios:
 
+```{r warning=FALSE}
+mdsEuclidean <- metaMDS(datos, distance="euc", autotransform=FALSE, trace=0)
+plot(mdsEuclidean, display="sites", type="text", main = "Euclidean")
+mdsCurtis <- metaMDS(datos, distance="bray", autotransform=FALSE, trace=0)
+plot(mdsCurtis, display="sites", type="text", main="BrayCurtis")
+
+```
+
+Son gráficos multidimensionales no métricos (NMDS) muestran las distancias aproximadas entre sitios. Las distancias euclidianas tienden a enfatizar las diferencias debido a las especies más abundantes, mientras que BrayCurtis no.
+
+```{r}
+#Estandariza
+datos.perfil <- decostand(datos, method = "total")
+# Verificación, tiene que dar 1 en todos.
+apply(datos.perfil, 1, sum)
+# Matriz de distancias entre perfiles
+d18 <- dist(datos.perfil, method = "euclidean")
+# Cluster utilizando esta distancia entre sitios.
+cl18 <- hclust(d18)
+
+p <- ggdendrogram(cl18, rotate = FALSE, size = 2) +
+  labs(title = "Dendrograma con distancias euclidianas",
+       x = "Sitios",
+       y = "Similitud")
+
+ggplotly(p)
+
+```
+
+## Rarefacción
+
+```{r}
+
+```
+
+# Anotaciones
+Dejo algunas inquietudes:
+
+- ¿Qué pasa con los mamíferos domésticos? ¿Cómo se incluirían en el análisis?
+- ¿Cómo calcular esfuerzo de muestreo? ¿Qué tener en cuenta? Esto supongo que debe ser necesario porque en todos los sitios el esfuerzo debe ser diferente y debe influenciar a riqueza y abundancia de las especies en los sitios.
+- Cada área protegida tiene varios sistemas ¿estos se tienen que agrupar todos en uno? Así lo hice en el documento
