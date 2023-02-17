@@ -1,6 +1,9 @@
 ---
 title: "Analizando datos"
-output: html_document
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
 date: "2023-02-16"
 ---
 
@@ -11,9 +14,9 @@ library(lubridate)
 library(kableExtra)
 ```
 
-Esto es una prueba con los datos que estan en el drive, carpeta "Planillas Excel", utilicé "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
+Esto es una prueba con los datos que están en el drive, carpeta "Planillas Excel", utilicé "2020_L Garzón.xlsx", "2020_LRocha_1ercampaña_1-5 y 10_NminyDUR.xlsx" y "2020_Solis Grande.xlsx".
 
-De cada tabla me quede con el Punto, Fecha, Hora, Especie, Cantidad de individuos y Observaciones, no elimine ninguna fila. Luego unifiqué las tres en un mismo archivo csv.
+De cada tabla me quedé con el Punto, Fecha, Hora, Especie, Cantidad de individuos y Observaciones, no elimine ninguna fila. Luego unifiqué las tres en un mismo archivo csv.
 
 # Importando tabla
 
@@ -37,8 +40,8 @@ Se observa que hay especies repetidas, algunas se les agrega ? o simplemente est
 # Limpiando datos
 Limpie los datos de "Especie" usando open refine. Deje solo los registros de mamiferos silvestres que lleguen hasta especie.
 
-```{r}
-data <- read_csv("./datos/datos-corredigos-silvestres.csv", col_types = cols( 
+```{r message=FALSE, warning=FALSE}
+data <- read_csv2("./datos/datos-corredigos-silvestres.csv", col_types = cols( 
   Punto = col_character(),
   Fecha = col_date(),
   Hora = col_time(),
@@ -62,7 +65,7 @@ records_per_species <- data %>%
   group_by(Especie) %>% 
   summarize(Total = sum(N)) %>%
   arrange(Total) %>% 
-  mutate(perc = round(Total / sum(Total), 3)*100)
+  mutate(perc = round(Total / sum(Total), 3))
 ```
 
 ```{r echo=FALSE}
@@ -71,14 +74,24 @@ records_per_species %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-Grafico:
+Gráfico:
 ```{r}
-ggplot(data=records_per_species, aes(x=reorder(Especie, perc), y=perc)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  xlab("") +
-  ylab("Porcentaje de registros") +
-  theme(axis.text.y=element_text(face="italic"))
+records_per_species %>% 
+  ggplot(aes(y=reorder(Especie, perc), x=perc)) +
+  geom_col(fill = "gray70") +
+  geom_text(aes(label = paste(perc*100, "%", sep ="")), nudge_x = 0.015, size=3.2) +
+  labs(
+    title = "Porcentaje de registros por especie",
+    subtitle = "Para todos los sitios, falta destacar especies prioritarias o estados de conservaci0n",
+    x = "Porcentaje de registros",
+    y = "",
+  ) +
+  scale_x_continuous(labels = scales::percent) +
+  theme(axis.text.y=element_text(face="italic"),
+        panel.background = element_rect(fill = "white", colour = "white", size = 0.5, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.1, linetype = 'solid', colour = "#f2f2f2"),
+        panel.grid.minor = element_line(size = 0.1, linetype = 'solid', colour = "#f2f2f2")
+  )
 ```
 
 # Probando el paquete "vegan".
@@ -95,18 +108,21 @@ Para utilizar este paquete necesitamos que la información esté organizada de e
 |   **2**  |    0    |    0    |    2    |    5    |
 |   **N**  |    0    |    0    |    0    |    10   |
 
+Es decir, la primera columna son los sitios en formato numérico y, por lo tanto, cada fila corresponde a un sitio, el resto de columnas son las especies y el contenido en las celdas es la cantidad de registros para cada sp.
+
 ## Armado de la tabla
 
 Elimino la fecha, hora y observaciones porque no tienen sentido para este análisis.
 
 ```{r}
-data_vegan_long <- data %>% 
+data_vegan_long <- data %>%
+  mutate(Punto=str_extract(Punto, "^.{2}")) %>%
   select(Punto, Especie, N) %>% 
   group_by(Punto, Especie) %>% 
   summarize(Total = sum(N), .groups = 'drop')
 ```
 
-La tabla ahora luce así:
+La tabla ahora luce de esta forma:
 
 ```{r echo=FALSE}
 head(data_vegan_long) %>% 
@@ -114,14 +130,17 @@ head(data_vegan_long) %>%
   kable_styling(bootstrap_options = c("striped", "hover"))
 ```
 
-Para cada punto hay un n de las especies.
-
-El paquete vegan necesita que las filas sean los sitios, las columnas el recuento por especie y los sitios tienen que ser numericos.
+Para cada punto hay un n de las especies. Con esto, ahora puedo transformar esta tabla larga (long) a una ancha.
 ```{r}
 data_vegan_wide <- data_vegan_long %>% 
   spread(Especie, Total) %>% 
-  mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>%  #rellena con ceros los NA's
-  mutate(Punto, Punto = row_number())
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))  # rellena con ceros los NA's
+
+### Guardo qué número es cada punto
+puntos <- data_vegan_wide$Punto 
+
+#### Paso de indigo LG, LR, SG a número 1, 2 y 3
+data_vegan_wide <- mutate(data_vegan_wide, Punto, Punto = row_number())
 ```
 
 ```{r echo=FALSE}
@@ -131,13 +150,36 @@ head(data_vegan_wide) %>%
   scroll_box(width = "100%")
 ```
 
-## Calculando estadísticos
+## Cálculo de estadísticos
 
-Explorando; curva de acumulación
+Riqueza, diversidad, índice de dominancia, etc. Elimino los SD porque dan todos cero ¿qué será? Además, desde chao en adelante dan todos números enteros. Cuando hago un pool y calculo lo mismo da números con coma ¿es importante?
 ```{r}
 datos <- data_vegan_wide
-sp1 <- specaccum(datos)
-plot(sp1)
+
+outcome <- tibble(id = data_vegan_wide$Punto, puntos = puntos) %>% 
+  mutate(richness_ = specnumber(datos),
+         shannon_ = diversity(datos, index = "shannon"),
+         simpson_ = diversity(datos, index = "simpson"),
+         invsimpson_ = diversity(datos, index = "invsimpson"),
+         specpool(datos, pool = puntos)) %>% 
+  select(-Species, -ends_with(".se"))
 ```
 
+```{r echo=FALSE}
+outcome %>% 
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>% 
+  scroll_box(width = "100%")
+```
+
+```{r}
+
+```
+
+Esto es lo que decía antes sobre los números con coma:
+
+
+```{r}
+specpool(datos)
+```
 
