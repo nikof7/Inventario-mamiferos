@@ -217,11 +217,6 @@ ggplotly(p)
 
 ```
 
-## Rarefacción
-
-```{r}
-
-```
 
 # Anotaciones
 Dejo algunas inquietudes:
